@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "731475474009",
+    "project_id": "mayle-ortopedia",
+    "storage_bucket": "mayle-ortopedia.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:731475474009:android:a532961ae0733d7f646348",
+        "android_client_info": {
+          "package_name": "com.mayle.ortopedia"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKO_rUTiHX7DfMquMvvwP2ErYM2Ekn93U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
