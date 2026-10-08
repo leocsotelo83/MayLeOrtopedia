@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -380,6 +382,14 @@ fun MayLeLogin(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Image(
+            painter = painterResource(id = R.drawable.mayle_logo),
+            contentDescription = "MayLe Ortopedia",
+            modifier = Modifier.height(82.dp)
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
         Text(
             text = "MayLe Ortopedia",
             fontSize = 34.sp,
@@ -498,6 +508,19 @@ fun MayLeLogin(
                 fontWeight = FontWeight.Bold
             )
         }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Text(
+            text = "Desarrollado por Leandro Sotelo",
+            fontSize = 12.sp,
+            color = Color.Gray
+        )
+        Text(
+            text = "Beta 1.0",
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
     }
 }
 
@@ -596,6 +619,14 @@ fun MayLePrincipal(
             ) {
                 Spacer(modifier = Modifier.height(40.dp))
 
+                Image(
+                    painter = painterResource(id = R.drawable.mayle_logo),
+                    contentDescription = "MayLe Ortopedia",
+                    modifier = Modifier.height(62.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Text(
                     text = "MayLe Ortopedia",
                     fontSize = 30.sp,
@@ -678,6 +709,19 @@ fun MayLePrincipal(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Desarrollado por Leandro Sotelo",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                Text(
+                    text = "Beta 1.0",
+                    fontSize = 11.sp,
+                    color = Color.Gray
+                )
             }
         }
     }
