@@ -207,8 +207,8 @@ data class ReporteProductoVarianteFila(
 )
 
 data class VarianteEntrada(
-    var nombre: String = "",
-    var stock: String = "0"
+    val nombre: String = "",
+    val stock: String = "0"
 )
 
 fun formatoPrecio(valor: Double): String {
@@ -552,7 +552,8 @@ fun MayLePrincipal(
     when (pantalla) {
         "ventas" -> {
             MayLeVentas(
-                puntoVenta = if (rol == "admin" || puntoVenta.isBlank()) "SIN ASIGNAR" else puntoVenta,
+                puntoVenta = if (puntoVenta.isBlank()) "SIN ASIGNAR" else puntoVenta,
+                esAdmin = rol == "admin",
                 onVolver = { pantalla = "menu" }
             )
         }
@@ -577,7 +578,7 @@ fun MayLePrincipal(
             MayLeCaja(
                 usuarioId = usuario?.uid ?: "",
                 usuarioEmail = usuario?.email ?: "",
-                puntoVenta = if (rol == "admin" || puntoVenta.isBlank()) "SIN ASIGNAR" else puntoVenta,
+                puntoVenta = if (puntoVenta.isBlank()) "SIN ASIGNAR" else puntoVenta,
                 esAdmin = rol == "admin",
                 onVolver = { pantalla = "menu" }
             )
@@ -645,7 +646,7 @@ fun MayLePrincipal(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Punto de venta: " + if (rol == "admin" || puntoVenta.isBlank()) "SIN ASIGNAR" else puntoVenta,
+                    text = "Punto de venta: " + if (puntoVenta.isBlank()) "SIN ASIGNAR" else puntoVenta,
                     fontSize = 16.sp,
                     color = azulMayLe
                 )
@@ -1421,7 +1422,9 @@ fun MayLeNuevoUsuario(
             Button(
                 onClick = {
                     rol = "admin"
-                    puntoVenta = ""
+                    if (puntoVenta.isBlank()) {
+                        puntoVenta = opcionesPuntosVenta.firstOrNull().orEmpty()
+                    }
                 },
                 modifier = Modifier.weight(1f)
             ) {
@@ -1429,23 +1432,21 @@ fun MayLeNuevoUsuario(
             }
         }
 
-        if (rol == "vendedor") {
-            Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-            MayLeSeleccionarPuntoVenta(
-                puntoVentaActual = puntoVenta,
-                opciones = opcionesPuntosVenta,
-                onSeleccion = { puntoVenta = it }
+        MayLeSeleccionarPuntoVenta(
+            puntoVentaActual = puntoVenta,
+            opciones = opcionesPuntosVenta,
+            onSeleccion = { puntoVenta = it }
+        )
+
+        if (!cargandoPuntosVenta && opcionesPuntosVenta.isEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Configure primero los puntos de venta en Administración.",
+                color = Color.Red,
+                fontSize = 13.sp
             )
-
-            if (!cargandoPuntosVenta && opcionesPuntosVenta.isEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Configure primero los puntos de venta en Administración.",
-                    color = Color.Red,
-                    fontSize = 13.sp
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -1474,8 +1475,8 @@ fun MayLeNuevoUsuario(
                     return@Button
                 }
 
-                if (rol == "vendedor" && puntoVenta.isBlank()) {
-                    mensaje = "Seleccione el punto de venta para el vendedor"
+                if (puntoVenta.isBlank()) {
+                    mensaje = "Seleccione el punto de venta"
                     return@Button
                 }
 
@@ -1487,7 +1488,7 @@ fun MayLeNuevoUsuario(
                     email = email.trim(),
                     password = password,
                     rol = rol,
-                    puntoVenta = if (rol == "admin") "" else puntoVenta.trim().take(10).uppercase(),
+                    puntoVenta = puntoVenta.trim().take(10).uppercase(),
                     montoAperturaCaja = montoAperturaCaja.toDoubleOrNull() ?: 0.0,
                     onSuccess = {
                         guardando = false
@@ -1685,7 +1686,9 @@ fun MayLeEditarUsuario(
             Button(
                 onClick = {
                     rol = "admin"
-                    puntoVenta = ""
+                    if (puntoVenta.isBlank()) {
+                        puntoVenta = opcionesPuntosVenta.firstOrNull().orEmpty()
+                    }
                 },
                 modifier = Modifier.weight(1f)
             ) {
@@ -1693,15 +1696,13 @@ fun MayLeEditarUsuario(
             }
         }
 
-        if (rol == "vendedor") {
-            Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-            MayLeSeleccionarPuntoVenta(
-                puntoVentaActual = puntoVenta,
-                opciones = opcionesPuntosVenta,
-                onSeleccion = { puntoVenta = it }
-            )
-        }
+        MayLeSeleccionarPuntoVenta(
+            puntoVentaActual = puntoVenta,
+            opciones = opcionesPuntosVenta,
+            onSeleccion = { puntoVenta = it }
+        )
 
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -1747,15 +1748,15 @@ fun MayLeEditarUsuario(
 
         Button(
             onClick = {
-                if (rol == "vendedor" && puntoVenta.isBlank()) {
-                    mensaje = "Seleccione el punto de venta para el vendedor"
+                if (puntoVenta.isBlank()) {
+                    mensaje = "Seleccione el punto de venta"
                     return@Button
                 }
 
                 guardando = true
                 mensaje = ""
 
-                val pvLimpio = if (rol == "admin") "" else puntoVenta.trim().take(10).uppercase()
+                val pvLimpio = puntoVenta.trim().take(10).uppercase()
 
                 val cambios = hashMapOf<String, Any>(
                     "role" to rol,
@@ -1801,6 +1802,7 @@ fun MayLeEditarUsuario(
 @Composable
 fun MayLeVentas(
     puntoVenta: String,
+    esAdmin: Boolean,
     onVolver: () -> Unit
 ) {
     BackHandler(enabled = true, onBack = onVolver)
@@ -1817,7 +1819,7 @@ fun MayLeVentas(
     var nombreComprador by remember { mutableStateOf("") }
     var carrito by remember { mutableStateOf(listOf<VentaItem>()) }
     var cargando by remember { mutableStateOf(true) }
-    var porcentajeComision by remember { mutableStateOf(10.0) }
+    var porcentajeComision by remember { mutableStateOf(if (esAdmin) 0.0 else 10.0) }
     var guardando by remember { mutableStateOf(false) }
     var mensaje by remember { mutableStateOf("") }
     var comprobante by remember { mutableStateOf("") }
@@ -1837,22 +1839,26 @@ fun MayLeVentas(
             }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(esAdmin) {
         cargarProductos()
 
-        FirebaseFirestore.getInstance()
-            .collection("configuracion")
-            .document("general")
-            .get()
-            .addOnSuccessListener { documento ->
-                porcentajeComision = when (val valor = documento.get("porcentajeComision")) {
-                    is Number -> valor.toDouble()
-                    else -> valor?.toString()?.replace(',', '.')?.toDoubleOrNull() ?: 10.0
-                }.coerceIn(0.0, 100.0)
-            }
-            .addOnFailureListener {
-                porcentajeComision = 10.0
-            }
+        if (esAdmin) {
+            porcentajeComision = 0.0
+        } else {
+            FirebaseFirestore.getInstance()
+                .collection("configuracion")
+                .document("general")
+                .get()
+                .addOnSuccessListener { documento ->
+                    porcentajeComision = when (val valor = documento.get("porcentajeComision")) {
+                        is Number -> valor.toDouble()
+                        else -> valor?.toString()?.replace(',', '.')?.toDoubleOrNull() ?: 10.0
+                    }.coerceIn(0.0, 100.0)
+                }
+                .addOnFailureListener {
+                    porcentajeComision = 10.0
+                }
+        }
     }
 
     val productosFiltrados = productos.filter { producto ->
@@ -4909,7 +4915,9 @@ fun MayLeNuevoProducto(
             ) {
                 OutlinedTextField(
                     value = variante.nombre,
-                    onValueChange = { variante.nombre = it.take(20) },
+                    onValueChange = {
+                        variantes[indice] = variante.copy(nombre = it.take(20))
+                    },
                     label = { Text("Variante") },
                     modifier = Modifier.weight(1f),
                     singleLine = true
@@ -4920,7 +4928,9 @@ fun MayLeNuevoProducto(
                 OutlinedTextField(
                     value = variante.stock,
                     onValueChange = {
-                        variante.stock = it.filter { caracter -> caracter.isDigit() }
+                        variantes[indice] = variante.copy(
+                            stock = it.filter { caracter -> caracter.isDigit() }
+                        )
                     },
                     label = { Text("Stock") },
                     modifier = Modifier.width(100.dp),
