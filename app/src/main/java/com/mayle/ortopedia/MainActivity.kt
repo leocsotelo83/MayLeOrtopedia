@@ -751,6 +751,11 @@ fun MayLeAdministracion(
             MayLeConfiguracionComision(onVolver = { pantalla = "menu" })
             return
         }
+
+        "precios" -> {
+            MayLePoliticaPrecios(onVolver = { pantalla = "menu" })
+            return
+        }
     }
 
     Column(
@@ -786,6 +791,12 @@ fun MayLeAdministracion(
 
         MayLeModuloButton(texto = "CONFIGURACIÓN DE COMISIONES") {
             pantalla = "comisiones"
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        MayLeModuloButton(texto = "POLÍTICA DE PRECIOS") {
+            pantalla = "precios"
         }
     }
 }
@@ -1103,6 +1114,230 @@ fun MayLeConfiguracionComision(
             Text(
                 text = mensaje,
                 color = if (mensaje.startsWith("Configuración")) Color(0xFF2E7D32) else Color.Red,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun MayLePoliticaPrecios(
+    onVolver: () -> Unit
+) {
+    BackHandler(enabled = true, onBack = onVolver)
+
+    val azulMayLe = Color(0xFF123B5D)
+    val db = FirebaseFirestore.getInstance()
+
+    var factorUnPago by remember { mutableStateOf("1.12") }
+    var factorTresCuotas by remember { mutableStateOf("1.30") }
+    var cargando by remember { mutableStateOf(true) }
+    var guardando by remember { mutableStateOf(false) }
+    var aplicando by remember { mutableStateOf(false) }
+    var mensaje by remember { mutableStateOf("") }
+
+    fun leerFactor(texto: String): Double? {
+        return texto.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0.0 }
+    }
+
+    LaunchedEffect(Unit) {
+        db.collection("configuracion")
+            .document("general")
+            .get()
+            .addOnSuccessListener { documento ->
+                factorUnPago = formatoPrecio(documento.getDouble("factorUnPago") ?: 1.12)
+                factorTresCuotas = formatoPrecio(documento.getDouble("factorTresCuotas") ?: 1.30)
+                cargando = false
+            }
+            .addOnFailureListener {
+                cargando = false
+                mensaje = "No se pudo cargar la política. Se mantienen 1,12 y 1,30 como valores predeterminados."
+            }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp)
+    ) {
+        MayLeVolverButton(onClick = onVolver)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Política de precios",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = azulMayLe
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Defina los multiplicadores que se aplican sobre el precio efectivo.",
+            color = Color.Gray
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        OutlinedTextField(
+            value = factorUnPago,
+            onValueChange = { factorUnPago = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
+            label = { Text("Multiplicador 1 pago") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            enabled = !cargando && !guardando && !aplicando
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = factorTresCuotas,
+            onValueChange = { factorTresCuotas = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
+            label = { Text("Multiplicador 3 cuotas") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            enabled = !cargando && !guardando && !aplicando
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Button(
+            onClick = {
+                val unPago = leerFactor(factorUnPago)
+                val tresCuotas = leerFactor(factorTresCuotas)
+                if (unPago == null || tresCuotas == null) {
+                    mensaje = "Ingrese multiplicadores válidos mayores a cero"
+                    return@Button
+                }
+
+                guardando = true
+                mensaje = ""
+                db.collection("configuracion")
+                    .document("general")
+                    .set(
+                        mapOf(
+                            "factorUnPago" to unPago,
+                            "factorTresCuotas" to tresCuotas
+                        ),
+                        SetOptions.merge()
+                    )
+                    .addOnSuccessListener {
+                        guardando = false
+                        factorUnPago = formatoPrecio(unPago)
+                        factorTresCuotas = formatoPrecio(tresCuotas)
+                        mensaje = "Política guardada. Se aplicará automáticamente a los productos nuevos."
+                    }
+                    .addOnFailureListener { error ->
+                        guardando = false
+                        mensaje = "No se pudo guardar la política: ${error.message ?: "error"}"
+                    }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando && !guardando && !aplicando
+        ) {
+            Text(if (guardando) "GUARDANDO..." else "GUARDAR POLÍTICA")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = {
+                val unPago = leerFactor(factorUnPago)
+                val tresCuotas = leerFactor(factorTresCuotas)
+                if (unPago == null || tresCuotas == null) {
+                    mensaje = "Ingrese multiplicadores válidos mayores a cero"
+                    return@OutlinedButton
+                }
+
+                aplicando = true
+                mensaje = ""
+
+                db.collection("configuracion")
+                    .document("general")
+                    .set(
+                        mapOf(
+                            "factorUnPago" to unPago,
+                            "factorTresCuotas" to tresCuotas
+                        ),
+                        SetOptions.merge()
+                    )
+                    .addOnSuccessListener {
+                        db.collection("products")
+                            .get()
+                            .addOnSuccessListener { resultado ->
+                                if (resultado.isEmpty) {
+                                    aplicando = false
+                                    mensaje = "Política guardada. No hay productos para actualizar."
+                                    return@addOnSuccessListener
+                                }
+
+                                val batch = db.batch()
+                                var actualizados = 0
+                                resultado.documents.forEach { documento ->
+                                    val efectivo = documento.getDouble("precioContado")
+                                    if (efectivo != null) {
+                                        batch.update(
+                                            documento.reference,
+                                            mapOf(
+                                                "precioUnPago" to (efectivo * unPago),
+                                                "precioTresCuotas" to (efectivo * tresCuotas)
+                                            )
+                                        )
+                                        actualizados++
+                                    }
+                                }
+
+                                if (actualizados == 0) {
+                                    aplicando = false
+                                    mensaje = "Política guardada, pero no se encontraron productos con precio efectivo válido."
+                                } else {
+                                    batch.commit()
+                                        .addOnSuccessListener {
+                                            aplicando = false
+                                            factorUnPago = formatoPrecio(unPago)
+                                            factorTresCuotas = formatoPrecio(tresCuotas)
+                                            mensaje = "Nueva política aplicada a $actualizados productos."
+                                        }
+                                        .addOnFailureListener { error ->
+                                            aplicando = false
+                                            mensaje = "No se pudieron actualizar los productos: ${error.message ?: "error"}"
+                                        }
+                                }
+                            }
+                            .addOnFailureListener { error ->
+                                aplicando = false
+                                mensaje = "No se pudieron leer los productos: ${error.message ?: "error"}"
+                            }
+                    }
+                    .addOnFailureListener { error ->
+                        aplicando = false
+                        mensaje = "No se pudo guardar la política: ${error.message ?: "error"}"
+                    }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando && !guardando && !aplicando
+        ) {
+            Text(if (aplicando) "APLICANDO..." else "APLICAR NUEVA POLÍTICA A TODOS LOS PRODUCTOS")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Aplicar a todos mantiene el precio efectivo de cada producto y recalcula solamente 1 pago y 3 cuotas.",
+            color = Color.Gray,
+            fontSize = 13.sp
+        )
+
+        if (mensaje.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = mensaje,
+                color = if (mensaje.startsWith("Política") || mensaje.startsWith("Nueva política")) Color(0xFF2E7D32) else Color.Red,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -2864,8 +3099,6 @@ fun MayLeComisiones(
     var usuariosVendedores by remember { mutableStateOf(listOf<UsuarioApp>()) }
     var cargando by remember { mutableStateOf(true) }
     var mensaje by remember { mutableStateOf("") }
-    var vendedorSeleccionado by remember { mutableStateOf<UsuarioApp?>(null) }
-    var montoOrden by remember { mutableStateOf("") }
     var procesando by remember { mutableStateOf(false) }
 
     fun cargarComisiones() {
@@ -3015,10 +3248,17 @@ fun MayLeComisiones(
         .filter { it.estado == "ACEPTADO" }
         .sortedByDescending { it.fechaAceptacionMillis.takeIf { valor -> valor > 0L } ?: it.fechaMillis }
 
+    val modificadorComisiones = if (esAdmin) {
+        Modifier.verticalScroll(rememberScrollState())
+    } else {
+        Modifier
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .then(modificadorComisiones)
             .padding(20.dp)
     ) {
         MayLeVolverButton(onClick = onVolver)
@@ -3081,107 +3321,61 @@ fun MayLeComisiones(
                             Text("Pagadas: $${formatoPrecio(resumen.pagada)}")
                             Text("Pendientes: $${formatoPrecio(resumen.pendiente)}")
 
-                            if (resumen.pendiente > 0.0 && vendedor != null) {
+                            val ordenPendiente = pagos.firstOrNull {
+                                it.vendedorId == resumen.usuarioId && it.estado == "PENDIENTE_ACEPTACION"
+                            }
+
+                            if (ordenPendiente != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Orden pendiente de aceptación: $${formatoPrecio(ordenPendiente.monto)}",
+                                    color = Color.Gray,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else if (resumen.pendiente > 0.0 && vendedor != null) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = {
-                                        vendedorSeleccionado = vendedor
-                                        montoOrden = formatoPrecio(resumen.pendiente)
+                                        val monto = resumen.pendiente
+                                        if (monto <= 0.0) {
+                                            mensaje = "No hay comisión pendiente para este vendedor"
+                                            return@Button
+                                        }
+
+                                        procesando = true
                                         mensaje = ""
+
+                                        val datos = hashMapOf<String, Any>(
+                                            "vendedorId" to vendedor.id,
+                                            "vendedorEmail" to vendedor.email,
+                                            "monto" to monto,
+                                            "estado" to "PENDIENTE_ACEPTACION",
+                                            "ordenadoPorId" to usuarioId,
+                                            "ordenadoPorEmail" to usuarioActualEmail,
+                                            "fechaOrden" to FieldValue.serverTimestamp()
+                                        )
+
+                                        db.collection("pagosComisiones")
+                                            .add(datos)
+                                            .addOnSuccessListener {
+                                                procesando = false
+                                                mensaje = "Orden de pago por $${formatoPrecio(monto)} creada para ${vendedor.email}. Queda pendiente de aceptación."
+                                                cargarComisiones()
+                                            }
+                                            .addOnFailureListener { error ->
+                                                procesando = false
+                                                mensaje = "No se pudo crear la orden: ${error.message ?: "error"}"
+                                            }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = !procesando
                                 ) {
-                                    Text("GENERAR ORDEN DE PAGO")
+                                    Text(if (procesando) "GENERANDO..." else "GENERAR ORDEN DE PAGO")
                                 }
                             }
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
-            if (vendedorSeleccionado != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text("NUEVA ORDEN DE PAGO", fontWeight = FontWeight.Bold, color = azulMayLe)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text("Vendedor: ${vendedorSeleccionado?.email}")
-                        Text("Pendiente disponible: $${formatoPrecio(resumenVendedores.firstOrNull { it.usuarioId == vendedorSeleccionado?.id }?.pendiente ?: 0.0)}")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = montoOrden,
-                            onValueChange = { montoOrden = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
-                            label = { Text("Monto a pagar") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    vendedorSeleccionado = null
-                                    montoOrden = ""
-                                },
-                                modifier = Modifier.weight(1f),
-                                enabled = !procesando
-                            ) {
-                                Text("CANCELAR")
-                            }
-                            Button(
-                                onClick = {
-                                    val vendedor = vendedorSeleccionado ?: return@Button
-                                    val monto = montoOrden.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                    val pendienteDisponible = resumenVendedores.firstOrNull { it.usuarioId == vendedor.id }?.pendiente ?: 0.0
-
-                                    if (monto <= 0.0) {
-                                        mensaje = "Ingrese un monto válido"
-                                        return@Button
-                                    }
-                                    if (monto > pendienteDisponible + 0.001) {
-                                        mensaje = "El monto supera la comisión pendiente"
-                                        return@Button
-                                    }
-
-                                    procesando = true
-                                    mensaje = ""
-
-                                    val datos = hashMapOf<String, Any>(
-                                        "vendedorId" to vendedor.id,
-                                        "vendedorEmail" to vendedor.email,
-                                        "monto" to monto,
-                                        "estado" to "PENDIENTE_ACEPTACION",
-                                        "ordenadoPorId" to usuarioId,
-                                        "ordenadoPorEmail" to usuarioActualEmail,
-                                        "fechaOrden" to FieldValue.serverTimestamp()
-                                    )
-
-                                    db.collection("pagosComisiones")
-                                        .add(datos)
-                                        .addOnSuccessListener {
-                                            procesando = false
-                                            vendedorSeleccionado = null
-                                            montoOrden = ""
-                                            mensaje = "Orden de pago creada. Queda pendiente de aceptación del vendedor."
-                                            cargarComisiones()
-                                        }
-                                        .addOnFailureListener { error ->
-                                            procesando = false
-                                            mensaje = "No se pudo crear la orden: ${error.message ?: "error"}"
-                                        }
-                                },
-                                modifier = Modifier.weight(1f),
-                                enabled = !procesando
-                            ) {
-                                Text(if (procesando) "GUARDANDO..." else "CREAR ORDEN")
-                            }
-                        }
-                    }
                 }
             }
 
@@ -3261,17 +3455,19 @@ fun MayLeComisiones(
             if (ventas.isEmpty()) {
                 Text("No hay ventas registradas.")
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(ventas) { venta ->
-                        val anulada = venta.estado.lowercase() == "anulada"
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text("Fecha: ${venta.fechaTexto}", fontWeight = FontWeight.Bold)
-                                Text("Vendedor: ${venta.usuarioEmail}")
-                                Text("Venta: ${venta.id.takeLast(6)}")
-                                Text("Total: $${formatoPrecio(venta.total)}")
-                                Text(if (anulada) "ANULADA | Comisión: $0" else "Comisión: $${formatoPrecio(venta.comision)}")
-                            }
+                ventas.forEach { venta ->
+                    val anulada = venta.estado.lowercase() == "anulada"
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text("Fecha: ${venta.fechaTexto}", fontWeight = FontWeight.Bold)
+                            Text("Vendedor: ${venta.usuarioEmail}")
+                            Text("Venta: ${venta.id.takeLast(6)}")
+                            Text("Total: $${formatoPrecio(venta.total)}")
+                            Text(if (anulada) "ANULADA | Comisión: $0" else "Comisión: $${formatoPrecio(venta.comision)}")
                         }
                     }
                 }
@@ -4365,7 +4561,11 @@ fun MayLeProductosStock(
     var productos by remember { mutableStateOf(listOf<Producto>()) }
     var mostrandoFormulario by remember { mutableStateOf(false) }
     var mostrandoIngresoStock by remember { mutableStateOf(false) }
+    var mostrandoAjusteStock by remember { mutableStateOf(false) }
+    var mostrandoEdicionPrecio by remember { mutableStateOf(false) }
     var productoParaStock by remember { mutableStateOf<Producto?>(null) }
+    var productoParaAjuste by remember { mutableStateOf<Producto?>(null) }
+    var productoParaPrecio by remember { mutableStateOf<Producto?>(null) }
     var cargando by remember { mutableStateOf(true) }
     var mensaje by remember { mutableStateOf("") }
 
@@ -4398,6 +4598,38 @@ fun MayLeProductosStock(
             onStockGuardado = {
                 mostrandoIngresoStock = false
                 productoParaStock = null
+                cargarProductos()
+            }
+        )
+        return
+    }
+
+    if (mostrandoAjusteStock && productoParaAjuste != null) {
+        MayLeAjustarStock(
+            producto = productoParaAjuste!!,
+            onVolver = {
+                mostrandoAjusteStock = false
+                productoParaAjuste = null
+            },
+            onStockGuardado = {
+                mostrandoAjusteStock = false
+                productoParaAjuste = null
+                cargarProductos()
+            }
+        )
+        return
+    }
+
+    if (mostrandoEdicionPrecio && productoParaPrecio != null) {
+        MayLeEditarPrecioProducto(
+            producto = productoParaPrecio!!,
+            onVolver = {
+                mostrandoEdicionPrecio = false
+                productoParaPrecio = null
+            },
+            onPrecioGuardado = {
+                mostrandoEdicionPrecio = false
+                productoParaPrecio = null
                 cargarProductos()
             }
         )
@@ -4522,6 +4754,30 @@ fun MayLeProductosStock(
                                 ) {
                                     Text("INGRESAR STOCK")
                                 }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                OutlinedButton(
+                                    onClick = {
+                                        productoParaAjuste = producto
+                                        mostrandoAjusteStock = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("AJUSTAR STOCK")
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                OutlinedButton(
+                                    onClick = {
+                                        productoParaPrecio = producto
+                                        mostrandoEdicionPrecio = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("EDITAR PRECIO")
+                                }
                             }
                         }
                     }
@@ -4630,12 +4886,25 @@ fun MayLeIngresoStock(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        val puntoNormalizado = puntoVenta.trim().uppercase()
+                        val stockActual = if (puntoNormalizado.isBlank()) {
+                            variante.stock
+                        } else {
+                            producto.stockPorPuntoVenta[puntoNormalizado]
+                                ?.firstOrNull { it.nombre == variante.nombre }
+                                ?.stock
+                                ?: variante.stock
+                        }
                         Text(
                             text = variante.nombre,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Stock actual general: ${variante.stock}",
+                            text = if (puntoNormalizado.isBlank()) {
+                                "Stock actual general: $stockActual"
+                            } else {
+                                "Stock actual $puntoNormalizado: $stockActual"
+                            },
                             color = Color.Gray,
                             fontSize = 13.sp
                         )
@@ -4790,6 +5059,385 @@ fun MayLeIngresoStock(
 }
 
 @Composable
+fun MayLeAjustarStock(
+    producto: Producto,
+    onVolver: () -> Unit,
+    onStockGuardado: () -> Unit
+) {
+    BackHandler(enabled = true, onBack = onVolver)
+
+    val azulMayLe = Color(0xFF123B5D)
+    val db = FirebaseFirestore.getInstance()
+
+    var puntoVenta by remember { mutableStateOf("") }
+    var nuevosStocks by remember {
+        mutableStateOf(producto.variantesDefault.associate { it.nombre to "" })
+    }
+    var motivo by remember { mutableStateOf("") }
+    var guardando by remember { mutableStateOf(false) }
+    var mensaje by remember { mutableStateOf("") }
+
+    val variantes = producto.variantesDefault
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp)
+    ) {
+        MayLeVolverButton(onClick = onVolver)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Ajustar stock",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = azulMayLe
+        )
+        Text(producto.nombre, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Código: ${producto.codigo}")
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        OutlinedTextField(
+            value = puntoVenta,
+            onValueChange = { puntoVenta = it.take(10).uppercase() },
+            label = { Text("Punto de venta (opcional)") },
+            placeholder = { Text("Ej.: SANTIAGO") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Escriba la existencia correcta. Puede aumentar o disminuir el stock.",
+            color = Color.Gray,
+            fontSize = 13.sp
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        variantes.forEach { variante ->
+            val puntoNormalizado = puntoVenta.trim().uppercase()
+            val stockActual = if (puntoNormalizado.isBlank()) {
+                variante.stock
+            } else {
+                producto.stockPorPuntoVenta[puntoNormalizado]
+                    ?.firstOrNull { it.nombre == variante.nombre }
+                    ?.stock
+                    ?: variante.stock
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(variante.nombre, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (puntoNormalizado.isBlank()) "Stock actual general: $stockActual" else "Stock actual $puntoNormalizado: $stockActual",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                OutlinedTextField(
+                    value = nuevosStocks[variante.nombre] ?: "",
+                    onValueChange = { valor ->
+                        val filtrado = valor.filterIndexed { indice, c -> c.isDigit() || (c == '-' && indice == 0) }
+                        nuevosStocks = nuevosStocks.toMutableMap().apply {
+                            put(variante.nombre, filtrado)
+                        }
+                    },
+                    label = { Text("Nuevo") },
+                    modifier = Modifier.width(110.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        OutlinedTextField(
+            value = motivo,
+            onValueChange = { motivo = it.take(120) },
+            label = { Text("Motivo del ajuste") },
+            placeholder = { Text("Ej.: control físico de stock") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Button(
+            onClick = {
+                val valores = nuevosStocks.mapNotNull { (variante, texto) ->
+                    if (texto.isBlank() || texto == "-") null
+                    else texto.toLongOrNull()?.let { variante to it }
+                }.toMap()
+
+                if (valores.isEmpty()) {
+                    mensaje = "Ingrese al menos un nuevo stock"
+                    return@Button
+                }
+                if (motivo.isBlank()) {
+                    mensaje = "Indique el motivo del ajuste"
+                    return@Button
+                }
+
+                guardando = true
+                mensaje = ""
+
+                db.runTransaction { transaction ->
+                    val referencia = db.collection("products").document(producto.id)
+                    val documento = transaction.get(referencia)
+                    val puntoNormalizado = puntoVenta.trim().uppercase()
+                    val anteriores = mutableMapOf<String, Long>()
+                    val diferencias = mutableMapOf<String, Long>()
+
+                    if (puntoNormalizado.isBlank()) {
+                        val variantesActuales = mutableMapOf<String, Long>()
+                        variantesDesdeDocumento(documento).forEach {
+                            variantesActuales[it.nombre] = it.stock
+                        }
+
+                        valores.forEach { (nombreVariante, nuevoStock) ->
+                            val anterior = variantesActuales[nombreVariante] ?: 0L
+                            anteriores[nombreVariante] = anterior
+                            diferencias[nombreVariante] = nuevoStock - anterior
+                            variantesActuales[nombreVariante] = nuevoStock
+                        }
+
+                        transaction.update(referencia, "variantes", variantesActuales)
+                    } else {
+                        val mapaPuntosVenta = mutableMapOf<String, MutableMap<String, Any>>()
+                        val pvData = documento.get("puntosVenta") as? Map<*, *>
+
+                        if (pvData != null) {
+                            pvData.forEach { (pvKey, pvValue) ->
+                                val nombrePv = pvKey?.toString()?.trim()?.uppercase() ?: return@forEach
+                                if (pvValue is Map<*, *>) {
+                                    val mapaVariantes = mutableMapOf<String, Any>()
+                                    pvValue.forEach { (varKey, varValue) ->
+                                        if (varKey != null) {
+                                            val stock = when (varValue) {
+                                                is Number -> varValue.toLong()
+                                                else -> varValue?.toString()?.toLongOrNull() ?: 0L
+                                            }
+                                            mapaVariantes[varKey.toString()] = stock
+                                        }
+                                    }
+                                    mapaPuntosVenta[nombrePv] = mapaVariantes
+                                }
+                            }
+                        }
+
+                        val mapaDestino = mapaPuntosVenta.getOrPut(puntoNormalizado) {
+                            val nuevoMapa = mutableMapOf<String, Any>()
+                            variantesDesdeDocumento(documento).forEach {
+                                nuevoMapa[it.nombre] = it.stock
+                            }
+                            nuevoMapa
+                        }
+
+                        valores.forEach { (nombreVariante, nuevoStock) ->
+                            val anterior = (mapaDestino[nombreVariante] as? Number)?.toLong() ?: 0L
+                            anteriores[nombreVariante] = anterior
+                            diferencias[nombreVariante] = nuevoStock - anterior
+                            mapaDestino[nombreVariante] = nuevoStock
+                        }
+
+                        transaction.update(referencia, "puntosVenta", mapaPuntosVenta)
+                    }
+
+                    val refMovimiento = db.collection("movimientosStock").document()
+                    val datosMovimiento = hashMapOf<String, Any>(
+                        "tipo" to "AJUSTE",
+                        "usuarioId" to (FirebaseAuth.getInstance().currentUser?.uid ?: ""),
+                        "usuarioEmail" to (FirebaseAuth.getInstance().currentUser?.email ?: ""),
+                        "puntoVenta" to puntoNormalizado,
+                        "productoId" to producto.id,
+                        "codigo" to producto.codigo,
+                        "nombre" to producto.nombre,
+                        "stocksAnteriores" to anteriores,
+                        "stocksNuevos" to valores,
+                        "diferencias" to diferencias,
+                        "motivo" to motivo.trim(),
+                        "fechaHora" to FieldValue.serverTimestamp()
+                    )
+                    transaction.set(refMovimiento, datosMovimiento)
+                    null
+                }
+                    .addOnSuccessListener {
+                        guardando = false
+                        onStockGuardado()
+                    }
+                    .addOnFailureListener { error ->
+                        guardando = false
+                        mensaje = "No se pudo ajustar el stock: ${error.message ?: "error"}"
+                    }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !guardando
+        ) {
+            Text(if (guardando) "GUARDANDO..." else "GUARDAR AJUSTE")
+        }
+
+        if (mensaje.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(mensaje, color = Color.Red, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun MayLeEditarPrecioProducto(
+    producto: Producto,
+    onVolver: () -> Unit,
+    onPrecioGuardado: () -> Unit
+) {
+    BackHandler(enabled = true, onBack = onVolver)
+
+    val azulMayLe = Color(0xFF123B5D)
+    val db = FirebaseFirestore.getInstance()
+
+    var precioContado by remember { mutableStateOf(formatoPrecio(producto.precioContado)) }
+    var factorUnPago by remember { mutableStateOf(1.12) }
+    var factorTresCuotas by remember { mutableStateOf(1.30) }
+    var cargando by remember { mutableStateOf(true) }
+    var guardando by remember { mutableStateOf(false) }
+    var mensaje by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        db.collection("configuracion")
+            .document("general")
+            .get()
+            .addOnSuccessListener { documento ->
+                factorUnPago = documento.getDouble("factorUnPago") ?: 1.12
+                factorTresCuotas = documento.getDouble("factorTresCuotas") ?: 1.30
+                cargando = false
+            }
+            .addOnFailureListener {
+                cargando = false
+                mensaje = "No se pudo leer la política de precios. Se usarán 1,12 y 1,30."
+            }
+    }
+
+    val efectivo = precioContado.replace(',', '.').toDoubleOrNull()
+    val precioUnPago = efectivo?.times(factorUnPago) ?: 0.0
+    val precioTresCuotas = efectivo?.times(factorTresCuotas) ?: 0.0
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp)
+    ) {
+        MayLeVolverButton(onClick = onVolver)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text("Editar precio", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = azulMayLe)
+        Text(producto.nombre, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Código: ${producto.codigo}")
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        OutlinedTextField(
+            value = precioContado,
+            onValueChange = { precioContado = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
+            label = { Text("Precio efectivo") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            enabled = !cargando && !guardando
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = if (efectivo != null) formatoPrecio(precioUnPago) else "",
+            onValueChange = {},
+            label = { Text("Precio débito/crédito 1 pago") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            readOnly = true
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = if (efectivo != null) formatoPrecio(precioTresCuotas) else "",
+            onValueChange = {},
+            label = { Text("Precio crédito 3 cuotas") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            readOnly = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "Política actual: 1 pago × ${formatoPrecio(factorUnPago)} | 3 cuotas × ${formatoPrecio(factorTresCuotas)}",
+            color = Color.Gray
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Button(
+            onClick = {
+                val nuevoEfectivo = precioContado.replace(',', '.').toDoubleOrNull()
+                if (nuevoEfectivo == null || nuevoEfectivo < 0.0) {
+                    mensaje = "Ingrese un precio efectivo válido"
+                    return@Button
+                }
+
+                guardando = true
+                mensaje = ""
+                db.collection("products")
+                    .document(producto.id)
+                    .update(
+                        mapOf(
+                            "precioContado" to nuevoEfectivo,
+                            "precioUnPago" to (nuevoEfectivo * factorUnPago),
+                            "precioTresCuotas" to (nuevoEfectivo * factorTresCuotas)
+                        )
+                    )
+                    .addOnSuccessListener {
+                        guardando = false
+                        onPrecioGuardado()
+                    }
+                    .addOnFailureListener { error ->
+                        guardando = false
+                        mensaje = "No se pudo actualizar el precio: ${error.message ?: "error"}"
+                    }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando && !guardando
+        ) {
+            Text(if (guardando) "GUARDANDO..." else "GUARDAR NUEVO PRECIO")
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            "El nuevo precio se aplica al producto completo y a todas sus variantes y existencias.",
+            color = Color.Gray,
+            fontSize = 13.sp
+        )
+
+        if (mensaje.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(mensaje, color = Color.Red, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
 fun MayLeNuevoProducto(
     onVolver: () -> Unit,
     onProductoGuardado: () -> Unit
@@ -4797,10 +5445,13 @@ fun MayLeNuevoProducto(
     BackHandler(enabled = true, onBack = onVolver)
 
     val azulMayLe = Color(0xFF123B5D)
+    val db = FirebaseFirestore.getInstance()
 
     var codigo by remember { mutableStateOf("") }
     var nombre by remember { mutableStateOf("") }
     var precioContado by remember { mutableStateOf("") }
+    var factorUnPago by remember { mutableStateOf(1.12) }
+    var factorTresCuotas by remember { mutableStateOf(1.30) }
 
     val variantes = remember {
         mutableStateListOf(VarianteEntrada())
@@ -4809,9 +5460,19 @@ fun MayLeNuevoProducto(
     var guardando by remember { mutableStateOf(false) }
     var mensaje by remember { mutableStateOf("") }
 
+    LaunchedEffect(Unit) {
+        db.collection("configuracion")
+            .document("general")
+            .get()
+            .addOnSuccessListener { documento ->
+                factorUnPago = documento.getDouble("factorUnPago") ?: 1.12
+                factorTresCuotas = documento.getDouble("factorTresCuotas") ?: 1.30
+            }
+    }
+
     val efectivo = precioContado.replace(",", ".").toDoubleOrNull()
-    val precioUnPago = efectivo?.times(1.12) ?: 0.0
-    val precioTresCuotas = efectivo?.times(1.30) ?: 0.0
+    val precioUnPago = efectivo?.times(factorUnPago) ?: 0.0
+    val precioTresCuotas = efectivo?.times(factorTresCuotas) ?: 0.0
 
     Column(
         modifier = Modifier
@@ -4887,7 +5548,7 @@ fun MayLeNuevoProducto(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "1 pago × 1,12 | 3 cuotas × 1,30",
+            text = "1 pago × ${formatoPrecio(factorUnPago)} | 3 cuotas × ${formatoPrecio(factorTresCuotas)}",
             color = Color.Gray
         )
 
