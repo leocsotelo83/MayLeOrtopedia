@@ -615,22 +615,23 @@ fun MayLePrincipal(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(28.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 28.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Image(
                     painter = painterResource(id = R.drawable.mayle_logo),
                     contentDescription = "MayLe Ortopedia",
-                    modifier = Modifier.height(62.dp)
+                    modifier = Modifier.height(56.dp)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
                     text = "MayLe Ortopedia",
-                    fontSize = 30.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = azulMayLe
                 )
@@ -651,57 +652,57 @@ fun MayLePrincipal(
                     color = azulMayLe
                 )
 
-                Spacer(modifier = Modifier.height(30.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 MayLeModuloButton(texto = "VENTAS") {
                     pantalla = "ventas"
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 MayLeModuloButton(texto = "HISTORIAL DE VENTAS") {
                     pantalla = "historial"
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 MayLeModuloButton(texto = "PRODUCTOS Y STOCK") {
                     pantalla = "productos"
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 MayLeModuloButton(texto = "TRANSFERENCIAS DE STOCK") {
                     pantalla = "transferencias"
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 MayLeModuloButton(texto = "CAJA") {
                     pantalla = "caja"
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 MayLeModuloButton(texto = "COMISIONES") {
                     pantalla = "comisiones"
                 }
 
                 if (rol == "admin") {
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     MayLeModuloButton(texto = "ADMINISTRACIÓN") {
                         pantalla = "administracion"
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     MayLeModuloButton(texto = "REPORTES") {
                         pantalla = "reportes"
                     }
                 }
 
-                Spacer(modifier = Modifier.height(30.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 TextButton(onClick = onCerrarSesion) {
                     Text(
