@@ -2177,11 +2177,19 @@ fun MayLeVentas(
         return
     }
 
+    // Si se está eligiendo un producto y el carrito está vacío, la lista
+    // ocupa el alto disponible. En el resto de los pasos mantenemos
+    // el desplazamiento de la pantalla completa (formulario y carrito).
+    val catalogoPantallaCompleta = productoSeleccionado == null && carrito.isEmpty()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
+            .then(
+                if (catalogoPantallaCompleta) Modifier
+                else Modifier.verticalScroll(rememberScrollState())
+            )
             .padding(20.dp)
     ) {
         MayLeVolverButton(onClick = onVolver)
@@ -2226,7 +2234,12 @@ fun MayLeVentas(
                 Text("No se encontraron productos.")
             } else {
                 LazyColumn(
-                    modifier = Modifier.height(220.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (catalogoPantallaCompleta) Modifier.weight(1f)
+                            else Modifier.height(220.dp)
+                        ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(productosFiltrados) { producto ->
@@ -4568,6 +4581,7 @@ fun MayLeProductosStock(
     var productoParaPrecio by remember { mutableStateOf<Producto?>(null) }
     var cargando by remember { mutableStateOf(true) }
     var mensaje by remember { mutableStateOf("") }
+    var busquedaProducto by remember { mutableStateOf("") }
 
     fun cargarProductos() {
         cargando = true
@@ -4586,6 +4600,13 @@ fun MayLeProductosStock(
 
     LaunchedEffect(Unit) {
         cargarProductos()
+    }
+
+    val productosFiltrados = productos.filter { producto ->
+        val texto = busquedaProducto.trim().lowercase()
+        texto.isEmpty() ||
+                producto.codigo.lowercase().contains(texto) ||
+                producto.nombre.lowercase().contains(texto)
     }
 
     if (mostrandoIngresoStock && productoParaStock != null) {
@@ -4687,15 +4708,28 @@ fun MayLeProductosStock(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
+        OutlinedTextField(
+            value = busquedaProducto,
+            onValueChange = { busquedaProducto = it },
+            label = { Text("Buscar por código o nombre") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         if (cargando) {
             Text("Cargando productos...")
         } else if (productos.isEmpty()) {
             Text("Todavía no hay productos cargados.")
+        } else if (productosFiltrados.isEmpty()) {
+            Text("No se encontraron productos con esa búsqueda.")
         } else {
             LazyColumn(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(productos) { producto ->
+                items(productosFiltrados) { producto ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
